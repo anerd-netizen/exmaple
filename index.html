@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Premium Kanban Board</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg1:#0f2027;
+  --bg2:#203a43;
+  --bg3:#2c5364;
+  --glass:rgba(255,255,255,0.08);
+  --border:rgba(255,255,255,0.15);
+  --text:#ffffff;
+  --accent:#00f5a0;
+}
+body.light{
+  --bg1:#f5f7fa;
+  --bg2:#e4ecf7;
+  --bg3:#d2e3fc;
+  --glass:rgba(255,255,255,0.6);
+  --border:rgba(0,0,0,0.1);
+  --text:#1a1a1a;
+  --accent:#2563eb;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Inter',sans-serif;
+  min-height:100vh;
+  background:linear-gradient(-45deg,var(--bg1),var(--bg2),var(--bg3));
+  background-size:400% 400%;
+  animation:gradient 15s ease infinite;
+  color:var(--text);
+  overflow-x:hidden;
+}
+@keyframes gradient{
+  0%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+  100%{background-position:0% 50%}
+}
+header{
+  padding:20px 40px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+h1{
+  font-weight:700;
+  font-size:28px;
+  letter-spacing:1px;
+}
+.toggle{
+  cursor:pointer;
+  padding:10px 18px;
+  border-radius:30px;
+  border:1px solid var(--border);
+  background:var(--glass);
+  backdrop-filter:blur(12px);
+  transition:.3s;
+}
+.toggle:hover{
+  transform:scale(1.05);
+  box-shadow:0 0 15px var(--accent);
+}
+.board{
+  display:flex;
+  gap:20px;
+  padding:20px 40px 60px;
+  overflow-x:auto;
+}
+.column{
+  flex:1;
+  min-width:260px;
+  background:var(--glass);
+  backdrop-filter:blur(20px);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:20px;
+  display:flex;
+  flex-direction:column;
+  max-height:75vh;
+}
+.column.drag-over{
+  box-shadow:0 0 20px var(--accent);
+}
+.column h2{
+  font-size:18px;
+  margin-bottom:15px;
+  display:flex;
+  justify-content:space-between;
+}
+.task-list{
+  flex:1;
+  overflow-y:auto;
+}
+.task{
+  background:rgba(255,255,255,0.1);
+  border:1px solid var(--border);
+  border-radius:15px;
+  padding:15px;
+  margin-bottom:12px;
+  cursor:grab;
+  transition:transform .3s,box-shadow .3s,opacity .3s;
+}
+.task:hover{
+  transform:translateY(-4px);
+  box-shadow:0 10px 20px rgba(0,0,0,0.3);
+}
+.task.dragging{
+  opacity:.5;
+  transform:rotate(3deg) scale(1.05);
+}
+.task.completed{
+  text-decoration:line-through;
+  opacity:.6;
+}
+.task .top{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.priority{
+  font-size:12px;
+  padding:4px 10px;
+  border-radius:20px;
+}
+.priority.low{background:#10b981;}
+.priority.medium{background:#f59e0b;}
+.priority.high{background:#ef4444;}
+.actions{
+  margin-top:10px;
+  display:flex;
+  justify-content:space-between;
+}
+button{
+  border:none;
+  padding:6px 12px;
+  border-radius:20px;
+  cursor:pointer;
+  font-size:12px;
+  transition:.3s;
+}
+button:hover{
+  transform:scale(1.1);
+}
+.add-section{
+  padding:20px 40px;
+  display:flex;
+  gap:10px;
+}
+input,select{
+  padding:10px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:var(--glass);
+  color:var(--text);
+  backdrop-filter:blur(10px);
+}
+.progress{
+  height:8px;
+  width:90%;
+  margin:10px auto 0;
+  background:rgba(255,255,255,0.2);
+  border-radius:20px;
+}
+.progress-bar{
+  height:100%;
+  width:0%;
+  background:var(--accent);
+  border-radius:20px;
+  transition:.4s;
+}
+.fade-in{
+  animation:fadeIn .4s ease forwards;
+}
+@keyframes fadeIn{
+  from{opacity:0;transform:translateY(10px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.fade-out{
+  animation:fadeOut .3s forwards;
+}
+@keyframes fadeOut{
+  to{opacity:0;transform:scale(.8)}
+}
+@media(max-width:900px){
+  .board{flex-direction:column}
+}
+</style>
+</head>
+<body>
+<header>
+<h1>Premium Kanban Board</h1>
+<div class="toggle" onclick="toggleTheme()">Toggle Theme</div>
+</header>
+
+<div class="add-section">
+<input type="text" id="taskTitle" placeholder="Task title">
+<select id="priority">
+<option value="low">Low</option>
+<option value="medium">Medium</option>
+<option value="high">High</option>
+</select>
+<button onclick="addTask()">Add Task</button>
+</div>
+
+<div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+
+<div class="board" id="board">
+</div>
+
+<script>
+const columnsData=["Backlog","To Do","In Progress","Completed"];
+let state=JSON.parse(localStorage.getItem("kanbanState"))||{
+  tasks:[],
+  theme:"dark"
+};
+
+function saveState(){
+  localStorage.setItem("kanbanState",JSON.stringify(state));
+}
+
+function toggleTheme(){
+  document.body.classList.toggle("light");
+  state.theme=document.body.classList.contains("light")?"light":"dark";
+  saveState();
+}
+
+if(state.theme==="light")document.body.classList.add("light");
+
+function createBoard(){
+  const board=document.getElementById("board");
+  board.innerHTML="";
+  columnsData.forEach(col=>{
+    const column=document.createElement("div");
+    column.className="column";
+    column.dataset.column=col;
+    column.innerHTML=`<h2>${col} <span>${state.tasks.filter(t=>t.column===col).length}</span></h2>
+    <div class="task-list" data-column="${col}"></div>`;
+    board.appendChild(column);
+  });
+}
+
+function renderTasks(){
+  document.querySelectorAll(".task-list").forEach(list=>list.innerHTML="");
+  state.tasks.forEach(task=>{
+    const list=document.querySelector(`.task-list[data-column='${task.column}']`);
+    if(!list)return;
+    const div=document.createElement("div");
+    div.className="task fade-in"+(task.column==="Completed"?" completed":"");
+    div.draggable=true;
+    div.dataset.id=task.id;
+    div.innerHTML=`
+      <div class="top">
+        <strong>${task.title}</strong>
+        <span class="priority ${task.priority}">${task.priority}</span>
+      </div>
+      <div class="actions">
+        <button onclick="editTask('${task.id}')">Edit</button>
+        <button onclick="deleteTask('${task.id}')">Delete</button>
+      </div>`;
+    addDragEvents(div);
+    list.appendChild(div);
+  });
+  updateProgress();
+  saveState();
+}
+
+function addTask(){
+  const title=document.getElementById("taskTitle").value.trim();
+  const priority=document.getElementById("priority").value;
+  if(!title)return;
+  state.tasks.push({
+    id:Date.now().toString(),
+    title,
+    priority,
+    column:"Backlog"
+  });
+  document.getElementById("taskTitle").value="";
+  renderTasks();
+}
+
+function deleteTask(id){
+  const index=state.tasks.findIndex(t=>t.id===id);
+  if(index>-1){
+    const el=document.querySelector(`[data-id='${id}']`);
+    el.classList.add("fade-out");
+    setTimeout(()=>{
+      state.tasks.splice(index,1);
+      renderTasks();
+    },300);
+  }
+}
+
+function editTask(id){
+  const task=state.tasks.find(t=>t.id===id);
+  const newTitle=prompt("Edit task",task.title);
+  if(newTitle){
+    task.title=newTitle;
+    renderTasks();
+  }
+}
+
+function updateProgress(){
+  const total=state.tasks.length;
+  const completed=state.tasks.filter(t=>t.column==="Completed").length;
+  const percent=total? (completed/total)*100:0;
+  document.getElementById("progressBar").style.width=percent+"%";
+}
+
+function addDragEvents(element){
+  element.addEventListener("dragstart",()=>{
+    element.classList.add("dragging");
+  });
+  element.addEventListener("dragend",()=>{
+    element.classList.remove("dragging");
+  });
+}
+
+document.addEventListener("dragover",e=>{
+  e.preventDefault();
+  const dragging=document.querySelector(".dragging");
+  if(!dragging)return;
+  const column=e.target.closest(".column");
+  if(column){
+    column.classList.add("drag-over");
+  }
+});
+
+document.addEventListener("dragleave",e=>{
+  const column=e.target.closest(".column");
+  if(column){
+    column.classList.remove("drag-over");
+  }
+});
+
+document.addEventListener("drop",e=>{
+  e.preventDefault();
+  const dragging=document.querySelector(".dragging");
+  const column=e.target.closest(".column");
+  if(dragging && column){
+    const id=dragging.dataset.id;
+    const task=state.tasks.find(t=>t.id===id);
+    task.column=column.dataset.column;
+    column.classList.remove("drag-over");
+    renderTasks();
+  }
+});
+
+createBoard();
+renderTasks();
+</script>
+
+</body>
+</html>
